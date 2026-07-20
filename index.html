@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EyeGuard - Eye Wellness Monitor</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0e1a;
+  color: #f1f5f9;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  min-height: 100vh;
+  padding: 20px;
+}
+#eyeguard-app {
+  background: #0f172a;
+  border-radius: 16px;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px;
+}
+.eg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+.eg-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+}
+.eg-status {
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(33,150,243,0.1);
+  color: #2196f3;
+  border: 1px solid rgba(33,150,243,0.3);
+}
+.eg-camera-section { margin-bottom: 20px; }
+.eg-camera-wrapper {
+  position: relative;
+  background: #1e293b;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  aspect-ratio: 16/9;
+  max-height: 320px;
+}
+#camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+#overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+#camera-placeholder {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+}
+.eg-placeholder-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+#camera-placeholder p { color: #64748b; margin: 0 0 16px 0; font-size: 14px; }
+.eg-cam-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 0 4px;
+}
+.eg-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+#cam-status { font-size: 13px; color: #64748b; }
+.eg-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.eg-card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid #334155;
+}
+.eg-card-label {
+  font-size: 11px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.eg-card-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #00c853;
+  margin-bottom: 2px;
+  transition: color 0.3s;
+}
+.eg-card-sub { font-size: 12px; color: #475569; }
+.eg-fatigue-section {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #334155;
+  margin-bottom: 20px;
+}
+.eg-fatigue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+#fatigue-score { font-weight: 700; color: #00c853; }
+.eg-fatigue-bar {
+  height: 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.eg-fatigue-fill {
+  height: 100%;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #00c853, #ffd600, #ff9100, #ff1744);
+  background-size: 400% 100%;
+  transition: width 0.5s ease;
+  position: relative;
+}
+.eg-fatigue-fill::after {
+  content: '';
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 20px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15));
+}
+.eg-fatigue-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #475569;
+}
+.eg-alerts-section {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #334155;
+  margin-bottom: 20px;
+}
+.eg-alerts-section h3 { margin: 0 0 16px 0; font-size: 16px; }
+.eg-alert-empty { color: #475569; text-align: center; padding: 20px; font-size: 14px; }
+.eg-alert-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  animation: slideIn 0.3s ease;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.eg-alert-icon { font-size: 24px; }
+.eg-alert-content { flex: 1; }
+.eg-alert-msg { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+.eg-alert-time { font-size: 12px; color: #64748b; }
+.eg-controls { display: flex; gap: 12px; flex-wrap: wrap; }
+.eg-btn-primary, .eg-btn-secondary, .eg-btn-danger {
+  padding: 10px 24px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.eg-btn-primary { background: #2196f3; color: white; }
+.eg-btn-primary:hover { background: #1976d2; }
+.eg-btn-danger { background: #ff1744; color: white; }
+.eg-btn-danger:hover { background: #d50000; }
+.eg-btn-secondary { background: #1e293b; color: #f1f5f9; border: 1px solid #334155; }
+.eg-btn-secondary:hover { background: #334155; }
+.eg-privacy-note { text-align: center; margin-top: 20px; font-size: 12px; color: #475569; }
+.eg-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+.eg-overlay.hidden { display: none; }
+.eg-overlay-content {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  max-width: 500px;
+  border: 2px solid #ff1744;
+  animation: popIn 0.3s ease;
+}
+@keyframes popIn {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.eg-overlay-icon { font-size: 64px; margin-bottom: 16px; }
+.eg-overlay-title { font-size: 24px; font-weight: 700; color: #ff1744; margin-bottom: 8px; text-transform: uppercase; }
+.eg-overlay-msg { font-size: 16px; color: #94a3b8; margin-bottom: 24px; }
+@media (max-width: 768px) {
+  .eg-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .eg-header h1 { font-size: 20px; }
+}
+</style>
+</head>
+<body>
+<div id="eyeguard-app">
+  <div class="eg-header">
+    <h1>EyeGuard</h1>
+    <div class="eg-status" id="status-badge">Standby</div>
+  </div>
+  <div class="eg-camera-section">
+    <div class="eg-camera-wrapper">
+      <video id="camera-feed" autoplay playsinline muted></video>
+      <canvas id="overlay-canvas"></canvas>
+      <div id="camera-placeholder">
+        <div class="eg-placeholder-icon">&#128249;</div>
+        <p>Camera feed will appear here</p>
+        <button id="start-btn" class="eg-btn-primary">Start Monitoring</button>
+      </div>
+    </div>
+    <div class="eg-cam-indicator">
+      <span class="eg-dot" id="cam-dot"></span>
+      <span id="cam-status">Camera Inactive</span>
+    </div>
+  </div>
+  <div class="eg-metrics-grid">
+    <div class="eg-card" id="card-ear">
+      <div class="eg-card-label">Eye Aspect Ratio</div>
+      <div class="eg-card-value" id="val-ear">--</div>
+      <div class="eg-card-sub">Threshold: 0.25</div>
+    </div>
+    <div class="eg-card" id="card-perclos">
+      <div class="eg-card-label">PERCLOS</div>
+      <div class="eg-card-value" id="val-perclos">--</div>
+      <div class="eg-card-sub">Window: 60s</div>
+    </div>
+    <div class="eg-card" id="card-blink">
+      <div class="eg-card-label">Blink Rate</div>
+      <div class="eg-card-value" id="val-blink">--</div>
+      <div class="eg-card-sub">Normal: 17/min</div>
+    </div>
+    <div class="eg-card" id="card-duration">
+      <div class="eg-card-label">Blink Duration</div>
+      <div class="eg-card-value" id="val-duration">--</div>
+      <div class="eg-card-sub">Normal: 0.3s</div>
+    </div>
+    <div class="eg-card" id="card-microsleep">
+      <div class="eg-card-label">Microsleeps</div>
+      <div class="eg-card-value" id="val-microsleep">0</div>
+      <div class="eg-card-sub">Session total</div>
+    </div>
+    <div class="eg-card" id="card-session">
+      <div class="eg-card-label">Session Time</div>
+      <div class="eg-card-value" id="val-session">00:00</div>
+      <div class="eg-card-sub">Duration</div>
+    </div>
+  </div>
+  <div class="eg-fatigue-section">
+    <div class="eg-fatigue-header">
+      <span>Fatigue Score</span>
+      <span id="fatigue-score">0 / 100</span>
+    </div>
+    <div class="eg-fatigue-bar">
+      <div class="eg-fatigue-fill" id="fatigue-fill" style="width: 0%"></div>
+    </div>
+    <div class="eg-fatigue-labels">
+      <span>Healthy</span><span>Mild</span><span>Moderate</span><span>Severe</span><span>Critical</span>
+    </div>
+  </div>
+  <div class="eg-alerts-section">
+    <h3>Recent Alerts</h3>
+    <div id="alerts-container">
+      <div class="eg-alert-empty">No alerts yet. Start monitoring to see alerts here.</div>
+    </div>
+  </div>
+  <div class="eg-controls">
+    <button id="toggle-btn" class="eg-btn-primary">Start Monitoring</button>
+    <button id="settings-btn" class="eg-btn-secondary">Settings</button>
+    <button id="reset-btn" class="eg-btn-secondary">Reset</button>
+  </div>
+  <div class="eg-privacy-note">&#128274; 100% Private - No video leaves your browser</div>
+</div>
+<div id="overlay-alert" class="eg-overlay hidden">
+  <div class="eg-overlay-content">
+    <div class="eg-overlay-icon" id="overlay-icon">&#128680;</div>
+    <div class="eg-overlay-title" id="overlay-title">Alert</div>
+    <div class="eg-overlay-msg" id="overlay-msg">Message</div>
+    <button id="overlay-dismiss" class="eg-btn-primary">I Acknowledge</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+<script>
+(function() {
+  const CONFIG = {
+    earThreshold: 0.25, perclosWindow: 60, perclosThreshold: 15,
+    normalBlinkRate: 17, dryEyeThreshold: 10,
+    blinkDurationNormal: 0.3, blinkDurationLong: 0.5,
+    microsleepThreshold: 1.0, fps: 30
+  };
+  let isMonitoring = false, faceMesh = null, camera = null;
+  let sessionStart = null, sessionTimer = null;
+  let earHistory = [], blinkHistory = [], perclosFrames = [];
+  let closedStartTime = null, isEyeClosed = false, consecutiveClosed = 0;
+  let totalBlinks = 0, totalMicrosleeps = 0;
+  const alertCooldowns = { need_water: 0, sleepy: 0, tired: 0, exhausted: 0 };
+  const COOLDOWN_SECS = { need_water: 600, sleepy: 300, tired: 300, exhausted: 60 };
+
+  const videoEl = document.getElementById('camera-feed');
+  const canvasEl = document.getElementById('overlay-canvas');
+  const ctx = canvasEl.getContext('2d');
+  const placeholderEl = document.getElementById('camera-placeholder');
+  const camDot = document.getElementById('cam-dot');
+  const camStatus = document.getElementById('cam-status');
+  const statusBadge = document.getElementById('status-badge');
+  const alertsContainer = document.getElementById('alerts-container');
+  const overlayEl = document.getElementById('overlay-alert');
+
+  function getEyeLandmarks(lm, idx) { return idx.map(i => lm[i]); }
+  function calcEAR(pts) {
+    if (pts.length !== 6) return 0;
+    const v1 = Math.hypot(pts[1].x - pts[5].x, pts[1].y - pts[5].y);
+    const v2 = Math.hypot(pts[2].x - pts[4].x, pts[2].y - pts[4].y);
+    const h = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y);
+    return h === 0 ? 0 : (v1 + v2) / (2 * h);
+  }
+
+  function updateMetrics(avgEAR, ts) {
+    const now = ts || Date.now() / 1000;
+    earHistory.push({ time: now, ear: avgEAR });
+    if (earHistory.length > CONFIG.perclosWindow * CONFIG.fps) earHistory.shift();
+
+    const isClosed = avgEAR < CONFIG.earThreshold;
+    perclosFrames.push({ time: now, closed: isClosed });
+    const cutoff = now - CONFIG.perclosWindow;
+    perclosFrames = perclosFrames.filter(f => f.time >= cutoff);
+
+    if (isClosed) {
+      consecutiveClosed++;
+      if (!closedStartTime && consecutiveClosed >= 2) { closedStartTime = now; isEyeClosed = true; }
+    } else {
+      if (isEyeClosed && consecutiveClosed >= 2) {
+        if (closedStartTime) {
+          const dur = now - closedStartTime;
+          if (dur > 0.05 && dur < CONFIG.microsleepThreshold) {
+            blinkHistory.push({ time: now, duration: dur }); totalBlinks++;
+          }
+          if (dur >= CONFIG.microsleepThreshold) {
+            totalMicrosleeps++;
+            triggerAlert('exhausted', 'CRITICAL FATIGUE - Stop working NOW!', 'critical');
+          }
+        }
+        closedStartTime = null; isEyeClosed = false;
+      }
+      consecutiveClosed = 0;
+    }
+
+    const perclos = perclosFrames.length > 0
+      ? (perclosFrames.filter(f => f.closed).length / perclosFrames.length) * 100 : 0;
+    const recentBlinks = blinkHistory.filter(b => now - b.time <= 60);
+    const blinkRate = recentBlinks.length;
+    const avgDur = recentBlinks.length > 0
+      ? recentBlinks.reduce((a, b) => a + b.duration, 0) / recentBlinks.length : 0;
+    return { ear: avgEAR, perclos, blinkRate, avgDuration: avgDur, totalMicrosleeps };
+  }
+
+  function calcFatigueScore(m) {
+    let s = 0;
+    if (m.ear > 0) s += Math.max(0, (0.35 - m.ear) / 0.35) * 100 * 0.30;
+    s += Math.min(100, (m.perclos / CONFIG.perclosThreshold) * 100) * 0.25;
+    if (m.blinkRate > 0 && m.blinkRate < CONFIG.normalBlinkRate)
+      s += ((CONFIG.normalBlinkRate - m.blinkRate) / CONFIG.normalBlinkRate) * 100 * 0.20;
+    if (m.avgDuration > CONFIG.blinkDurationLong)
+      s += Math.min(100, ((m.avgDuration - 0.2) / 0.5) * 100) * 0.15;
+    if (m.totalMicrosleeps > 0) s = Math.max(s, 85);
+    return Math.min(100, s);
+  }
+  function scoreToState(s) {
+    if (s >= 90) return 'critical';
+    if (s >= 75) return 'severe_fatigue';
+    if (s >= 50) return 'moderate_fatigue';
+    if (s >= 25) return 'mild_fatigue';
+    return 'healthy';
+  }
+
+  function triggerAlert(type, msg, level) {
+    const now = Date.now() / 1000;
+    if (now - alertCooldowns[type] < COOLDOWN_SECS[type]) return;
+    alertCooldowns[type] = now;
+    addAlertToUI(type, msg, level);
+    if (level === 'critical' || level === 'urgent') showOverlay(type, msg);
+    playSound(level);
+  }
+  function addAlertToUI(type, msg, level) {
+    const empty = alertsContainer.querySelector('.eg-alert-empty');
+    if (empty) empty.remove();
+    const colors = {
+      need_water: { bg: 'rgba(33,150,243,0.1)', border: '#2196f3', icon: '&#128167;' },
+      sleepy: { bg: 'rgba(255,214,0,0.1)', border: '#ffd600', icon: '&#128564;' },
+      tired: { bg: 'rgba(255,145,0,0.1)', border: '#ff9100', icon: '&#128554;' },
+      exhausted: { bg: 'rgba(255,23,68,0.1)', border: '#ff1744', icon: '&#128680;' }
+    };
+    const c = colors[type] || colors.need_water;
+    const item = document.createElement('div');
+    item.className = 'eg-alert-item';
+    item.style.cssText = `background:${c.bg};border-left:3px solid ${c.border};`;
+    item.innerHTML = `<div class="eg-alert-icon">${c.icon}</div><div class="eg-alert-content"><div class="eg-alert-msg">${msg}</div><div class="eg-alert-time">${new Date().toLocaleTimeString()}</div></div>`;
+    alertsContainer.insertBefore(item, alertsContainer.firstChild);
+    while (alertsContainer.children.length > 5) alertsContainer.removeChild(alertsContainer.lastChild);
+  }
+  function showOverlay(type, msg) {
+    const icons = { need_water: '&#128167;', sleepy: '&#128564;', tired: '&#128554;', exhausted: '&#128680;' };
+    document.getElementById('overlay-icon').innerHTML = icons[type] || '&#9888;';
+    document.getElementById('overlay-title').textContent = type.replace('_', ' ').toUpperCase();
+    document.getElementById('overlay-msg').textContent = msg;
+    overlayEl.classList.remove('hidden');
+  }
+  document.getElementById('overlay-dismiss').addEventListener('click', () => overlayEl.classList.add('hidden'));
+
+  function playSound(level) {
+    try {
+      const c = new (window.AudioContext || window.webkitAudioContext)();
+      const o = c.createOscillator(), g = c.createGain();
+      o.connect(g); g.connect(c.destination);
+      if (level === 'warning') { o.frequency.value = 800; g.gain.value = 0.3; o.start(); o.stop(c.currentTime + 0.3); }
+      else if (level === 'critical' || level === 'urgent') {
+        o.frequency.value = 1000; g.gain.value = 0.5; o.start(); o.stop(c.currentTime + 0.5);
+        setTimeout(() => { const o2 = c.createOscillator(), g2 = c.createGain(); o2.connect(g2); g2.connect(c.destination); o2.frequency.value = 1000; g2.gain.value = 0.5; o2.start(); o2.stop(c.currentTime + 0.5); }, 200);
+      }
+    } catch(e) {}
+  }
+
+  function updateUI(metrics, score, state) {
+    document.getElementById('val-ear').textContent = metrics.ear.toFixed(3);
+    document.getElementById('val-perclos').textContent = metrics.perclos.toFixed(1) + '%';
+    document.getElementById('val-blink').textContent = metrics.blinkRate + '/min';
+    document.getElementById('val-duration').textContent = metrics.avgDuration.toFixed(2) + 's';
+    document.getElementById('val-microsleep').textContent = metrics.totalMicrosleeps;
+
+    setCardColor('card-ear', metrics.ear, CONFIG.earThreshold, true);
+    setCardColor('card-perclos', metrics.perclos, CONFIG.perclosThreshold, false);
+    setCardColor('card-blink', metrics.blinkRate, CONFIG.dryEyeThreshold, true);
+    setCardColor('card-duration', metrics.avgDuration, CONFIG.blinkDurationLong, false);
+
+    document.getElementById('fatigue-score').textContent = score.toFixed(0) + ' / 100';
+    const fill = document.getElementById('fatigue-fill');
+    fill.style.width = score + '%';
+    const sc = { healthy: '#00c853', mild_fatigue: '#ffd600', moderate_fatigue: '#ff9100', severe_fatigue: '#ff1744', critical: '#d50000' };
+    fill.style.background = sc[state] || '#00c853';
+    const sl = { healthy: 'Healthy', mild_fatigue: 'Mild Fatigue', moderate_fatigue: 'Moderate Fatigue', severe_fatigue: 'Severe Fatigue', critical: 'CRITICAL' };
+    statusBadge.textContent = sl[state] || 'Unknown';
+    statusBadge.style.color = sc[state] || '#00c853';
+    statusBadge.style.background = (sc[state] || '#00c853') + '22';
+    statusBadge.style.borderColor = (sc[state] || '#00c853') + '44';
+
+    const now = Date.now() / 1000;
+    if (metrics.blinkRate > 0 && metrics.blinkRate < CONFIG.dryEyeThreshold)
+      triggerAlert('need_water', 'Hydration break - your eyes are dry', 'info');
+    if (metrics.perclos > CONFIG.perclosThreshold)
+      triggerAlert('sleepy', 'Drowsiness detected - take a break', 'warning');
+    if (metrics.avgDuration > CONFIG.blinkDurationLong)
+      triggerAlert('tired', 'Eye fatigue - 20-20-20 rule time', 'warning');
+  }
+  function setCardColor(id, val, thresh, rev) {
+    const el = document.getElementById(id).querySelector('.eg-card-value');
+    let c = '#00c853';
+    if (rev) {
+      if (val < thresh * 0.5) c = '#ff1744';
+      else if (val < thresh) c = '#ff9100';
+      else if (val < thresh * 1.3) c = '#ffd600';
+    } else {
+      if (val > thresh * 2) c = '#ff1744';
+      else if (val > thresh) c = '#ff9100';
+      else if (val > thresh * 0.7) c = '#ffd600';
+    }
+    el.style.color = c;
+  }
+  function updateSessionTime() {
+    if (!sessionStart) return;
+    const e = Math.floor((Date.now() - sessionStart) / 1000);
+    document.getElementById('val-session').textContent =
+      Math.floor(e / 60).toString().padStart(2, '0') + ':' + (e % 60).toString().padStart(2, '0');
+  }
+
+  async function initFaceMesh() {
+    faceMesh = new FaceMesh({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}` });
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    faceMesh.onResults(onResults);
+  }
+  function onResults(results) {
+    ctx.save(); ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+      const lm = results.multiFaceLandmarks[0];
+      drawConnectors(ctx, lm, FACEMESH_TESSELATION, { color: '#00c85322', lineWidth: 1 });
+      drawConnectors(ctx, lm, FACEMESH_CONTOURS, { color: '#00c85355', lineWidth: 1 });
+      const le = [33, 160, 158, 133, 153, 144], re = [362, 385, 387, 263, 373, 380];
+      drawEye(ctx, lm, le, '#00c853'); drawEye(ctx, lm, re, '#00c853');
+      const earL = calcEAR(getEyeLandmarks(lm, le));
+      const earR = calcEAR(getEyeLandmarks(lm, re));
+      const avgEAR = (earL + earR) / 2;
+      const metrics = updateMetrics(avgEAR);
+      const score = calcFatigueScore(metrics);
+      updateUI(metrics, score, scoreToState(score));
+    }
+    ctx.restore();
+  }
+  function drawEye(ctx, lm, idx, color) {
+    ctx.beginPath();
+    const pts = idx.map(i => lm[i]);
+    ctx.moveTo(pts[0].x * canvasEl.width, pts[0].y * canvasEl.height);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x * canvasEl.width, pts[i].y * canvasEl.height);
+    ctx.closePath(); ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  async function startCam() {
+    try {
+      camera = new Camera(videoEl, {
+        onFrame: async () => { if (faceMesh) await faceMesh.send({ image: videoEl }); },
+        width: 640, height: 480
+      });
+      await camera.start();
+      canvasEl.width = videoEl.videoWidth || 640;
+      canvasEl.height = videoEl.videoHeight || 480;
+      placeholderEl.style.display = 'none';
+      camDot.style.background = '#00c853';
+      camDot.style.animation = 'pulse 2s infinite';
+      camStatus.textContent = 'Camera Active - 30 FPS';
+      camStatus.style.color = '#00c853';
+      sessionStart = Date.now();
+      sessionTimer = setInterval(updateSessionTime, 1000);
+    } catch (err) {
+      alert('Camera access denied. Please allow camera permissions.');
+      console.error(err); stopMonitoring();
+    }
+  }
+  function stopCam() {
+    if (camera) { camera.stop(); camera = null; }
+    if (sessionTimer) { clearInterval(sessionTimer); sessionTimer = null; }
+    placeholderEl.style.display = 'flex';
+    camDot.style.background = '#64748b'; camDot.style.animation = 'none';
+    camStatus.textContent = 'Camera Inactive'; camStatus.style.color = '#64748b';
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    earHistory = []; blinkHistory = []; perclosFrames = [];
+    totalBlinks = 0; totalMicrosleeps = 0; sessionStart = null;
+  }
+
+  async function startMonitoring() {
+    if (isMonitoring) return;
+    isMonitoring = true;
+    document.getElementById('toggle-btn').textContent = 'Stop Monitoring';
+    document.getElementById('toggle-btn').classList.add('eg-btn-danger');
+    await initFaceMesh(); await startCam();
+  }
+  function stopMonitoring() {
+    if (!isMonitoring) return;
+    isMonitoring = false;
+    document.getElementById('toggle-btn').textContent = 'Start Monitoring';
+    document.getElementById('toggle-btn').classList.remove('eg-btn-danger');
+    stopCam();
+  }
+  function toggleMonitoring() { isMonitoring ? stopMonitoring() : startMonitoring(); }
+
+  document.getElementById('start-btn').addEventListener('click', startMonitoring);
+  document.getElementById('toggle-btn').addEventListener('click', toggleMonitoring);
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    stopMonitoring();
+    alertsContainer.innerHTML = '<div class="eg-alert-empty">No alerts yet. Start monitoring to see alerts here.</div>';
+    ['ear', 'perclos', 'blink', 'duration'].forEach(k => document.getElementById('val-' + k).textContent = '--');
+    document.getElementById('val-microsleep').textContent = '0';
+    document.getElementById('val-session').textContent = '00:00';
+    document.getElementById('fatigue-fill').style.width = '0%';
+    statusBadge.textContent = 'Standby'; statusBadge.style.color = '#2196f3';
+    statusBadge.style.background = 'rgba(33,150,243,0.1)';
+    statusBadge.style.borderColor = 'rgba(33,150,243,0.3)';
+  });
+  document.getElementById('settings-btn').addEventListener('click', () => {
+    alert('Settings panel coming soon!
+
+Current thresholds:
+- EAR: 0.25
+- PERCLOS: 15%
+- Blink rate: 10/min
+- Blink duration: 0.5s');
+  });
+})();
+</script>
+</body>
+</html>
