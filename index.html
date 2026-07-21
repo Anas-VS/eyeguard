@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EyeGuard — Eye Wellness Monitor</title>
+<meta name="description" content="Real-time eye fatigue, drowsiness and dry-eye monitoring. 100% local — no data ever leaves your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9EEF3;
+    --panel:#FFFFFF;
+    --ink:#16283D;
+    --ink-soft:#5A6B7E;
+    --line:#D3DCE5;
+    --ok:#0E7C7B;
+    --watch:#D98E04;
+    --danger:#C6403D;
+    --pupil:#101820;
+    --radius:14px;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --sans:'Instrument Sans', system-ui, sans-serif;
+    --display:'Bricolage Grotesque', var(--sans);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--ok)}
+
+  /* ---------- layout ---------- */
+  .app{max-width:1180px;margin:0 auto;padding:20px 20px 60px}
+  header.top{
+    display:flex;align-items:baseline;justify-content:space-between;
+    flex-wrap:wrap;gap:10px;padding:6px 2px 18px;
+  }
+  .brand{font-family:var(--display);font-weight:700;font-size:1.55rem;letter-spacing:-.02em}
+  .brand .dot{color:var(--ok)}
+  .tagline{font-size:.85rem;color:var(--ink-soft)}
+  .privacy-chip{
+    font-family:var(--mono);font-size:.72rem;color:var(--ok);
+    border:1px solid var(--ok);border-radius:999px;padding:3px 10px;white-space:nowrap;
+  }
+
+  .grid{
+    display:grid;gap:18px;
+    grid-template-columns: 380px 1fr;
+    align-items:start;
+  }
+  @media (max-width:900px){ .grid{grid-template-columns:1fr} }
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:18px;
+  }
+  .card h2{
+    font-family:var(--display);font-size:1.02rem;font-weight:600;
+    letter-spacing:.01em;margin-bottom:12px;
+  }
+
+  /* ---------- camera ---------- */
+  .cam-wrap{position:relative;border-radius:10px;overflow:hidden;background:#0d141b;aspect-ratio:4/3}
+  video{display:none}
+  canvas#view{width:100%;height:100%;display:block;object-fit:cover;transform:scaleX(-1)}
+  .cam-off{
+    position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;color:#8fa2b5;text-align:center;padding:20px;
+    font-size:.9rem;
+  }
+  .cam-off .eye-glyph{font-size:2.2rem}
+  .controls{display:flex;gap:10px;margin-top:14px}
+  button{
+    font-family:var(--sans);font-weight:600;font-size:.9rem;
+    border-radius:9px;border:1px solid var(--line);
+    padding:10px 16px;cursor:pointer;background:#F2F6F9;color:var(--ink);
+    transition:filter .15s;
+  }
+  button:hover{filter:brightness(.96)}
+  button:focus-visible{outline:2px solid var(--ok);outline-offset:2px}
+  button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+  button.primary[disabled]{opacity:.5;cursor:not-allowed}
+  button.stop{background:var(--danger);color:#fff;border-color:var(--danger)}
+  .status-line{
+    margin-top:12px;font-family:var(--mono);font-size:.75rem;color:var(--ink-soft);
+    min-height:1.2em;
+  }
+
+  /* ---------- signature: the iris gauge ---------- */
+  .iris-card{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .iris{
+    --score:0; /* 0..100 */
+    width:190px;height:190px;border-radius:50%;
+    position:relative;
+    background:
+      radial-gradient(circle at 50% 45%, #fff 0 18%, transparent 18.5%),
+      conic-gradient(var(--iris-color,#0E7C7B) calc(var(--score)*1%), #DFE7EE 0);
+    display:flex;align-items:center;justify-content:center;
+    transition:background .6s;
+  }
+  .iris::before{ /* pupil */
+    content:"";position:absolute;width:56%;height:56%;border-radius:50%;
+    background:var(--panel);
+    border:1px solid var(--line);
+  }
+  .iris .score-num{
+    position:relative;z-index:1;font-family:var(--display);
+    font-weight:700;font-size:2.6rem;letter-spacing:-.03em;
+  }
+  .iris .score-label{
+    position:absolute;z-index:1;bottom:24%;font-family:var(--mono);
+    font-size:.62rem;color:var(--ink-soft);letter-spacing:.14em;text-transform:uppercase;
+  }
+  .state-badge{
+    font-family:var(--mono);font-size:.8rem;font-weight:600;
+    padding:5px 14px;border-radius:999px;border:1px solid var(--line);
+    background:#F2F6F9;
+  }
+  .state-badge[data-level="ok"]{color:var(--ok);border-color:var(--ok)}
+  .state-badge[data-level="watch"]{color:var(--watch);border-color:var(--watch)}
+  .state-badge[data-level="danger"]{color:#fff;background:var(--danger);border-color:var(--danger)}
+
+  /* ---------- metrics ---------- */
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .metric{
+    border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#FAFCFE;
+  }
+  .metric .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+  .metric .v{font-family:var(--mono);font-size:1.35rem;font-weight:600;margin-top:2px}
+  .metric .u{font-size:.72rem;color:var(--ink-soft);font-family:var(--mono)}
+  .metric.flag .v{color:var(--watch)}
+  .metric.alarm .v{color:var(--danger)}
+
+  /* ---------- alert log ---------- */
+  .log{list-style:none;max-height:230px;overflow-y:auto;display:flex;flex-direction:column;gap:8px}
+  .log li{
+    font-size:.85rem;border-left:3px solid var(--line);padding:6px 10px;background:#FAFCFE;border-radius:0 8px 8px 0;
+  }
+  .log li time{font-family:var(--mono);font-size:.7rem;color:var(--ink-soft);display:block}
+  .log li.watch{border-left-color:var(--watch)}
+  .log li.danger{border-left-color:var(--danger)}
+  .log li.ok{border-left-color:var(--ok)}
+  .log-empty{color:var(--ink-soft);font-size:.85rem}
+
+  /* ---------- settings ---------- */
+  details.settings{margin-top:4px}
+  details.settings summary{
+    cursor:pointer;font-family:var(--mono);font-size:.78rem;color:var(--ink-soft);
+    letter-spacing:.06em;
+  }
+  .setting-row{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:.85rem}
+  .setting-row label{flex:1}
+  .setting-row output{font-family:var(--mono);font-size:.78rem;width:52px;text-align:right}
+  input[type=range]{flex:1.4;accent-color:var(--ok)}
+  .setting-check{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:.85rem}
+
+  /* ---------- critical overlay ---------- */
+  #overlay{
+    position:fixed;inset:0;background:rgba(198,64,61,.96);color:#fff;
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;z-index:99;padding:30px;
+  }
+  #overlay.show{display:flex}
+  #overlay h1{font-family:var(--display);font-size:clamp(1.8rem,5vw,3.2rem);font-weight:800;letter-spacing:-.02em}
+  #overlay p{margin-top:12px;font-size:1.05rem;max-width:34em}
+  #overlay button{margin-top:26px;background:#fff;color:var(--danger);border-color:#fff;font-size:1rem;padding:12px 26px}
+
+  /* ---------- error banner ---------- */
+  #errbox{
+    display:none;margin-bottom:16px;border:1px solid var(--danger);
+    background:#FDF1F0;color:#7C2B29;border-radius:10px;padding:14px 16px;font-size:.9rem;
+  }
+  #errbox.show{display:block}
+  #errbox code{font-family:var(--mono);font-size:.8rem}
+
+  footer{margin-top:34px;font-size:.78rem;color:var(--ink-soft);text-align:center}
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important} }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div>
+      <div class="brand">EyeGuard<span class="dot">.</span></div>
+      <div class="tagline">Know your body before your body knows.</div>
+    </div>
+    <div class="privacy-chip">100% local · no video stored · no cloud</div>
+  </header>
+
+  <div id="errbox" role="alert"></div>
+
+  <div class="grid">
+    <!-- LEFT COLUMN -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <section class="card">
+        <h2>Camera</h2>
+        <div class="cam-wrap">
+          <video id="video" playsinline muted></video>
+          <canvas id="view" width="640" height="480"></canvas>
+          <div class="cam-off" id="camOff">
+            <div class="eye-glyph">👁</div>
+            <div>Camera is off.<br>Press <strong>Start monitoring</strong> and allow camera access.</div>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="primary" id="btnStart">Start monitoring</button>
+          <button id="btnStop" style="display:none" class="stop">Stop</button>
+          <button id="btnTest" title="Play a sample alert tone">Test sound</button>
+        </div>
+        <div class="status-line" id="statusLine">Loading face-tracking model…</div>
+
+        <details class="settings">
+          <summary>SETTINGS</summary>
+          <div class="setting-row">
+            <label for="sEar">Eye-closed threshold (EAR)</label>
+            <input type="range" id="sEar" min="0.12" max="0.30" step="0.01" value="0.21">
+            <output id="oEar">0.21</output>
+          </div>
+          <div class="setting-row">
+            <label for="sPerclos">PERCLOS alert level</label>
+            <input type="range" id="sPerclos" min="8" max="30" step="1" value="15">
+            <output id="oPerclos">15%</output>
+          </div>
+          <div class="setting-row">
+            <label for="sDry">Dry-eye blink rate</label>
+            <input type="range" id="sDry" min="4" max="14" step="1" value="10">
+            <output id="oDry">10/min</output>
+          </div>
+          <div class="setting-check">
+            <input type="checkbox" id="sSound" checked>
+            <label for="sSound">Sound alerts</label>
+          </div>
+          <div class="setting-check">
+            <input type="checkbox" id="sNotif">
+            <label for="sNotif">Desktop notifications</label>
+          </div>
+        </details>
+      </section>
+
+      <section class="card iris-card">
+        <h2 style="align-self:flex-start">Fatigue</h2>
+        <div class="iris" id="iris">
+          <div class="score-num" id="scoreNum">–</div>
+          <div class="score-label">fatigue 0–100</div>
+        </div>
+        <div class="state-badge" id="stateBadge" data-level="ok">STANDBY</div>
+      </section>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <section class="card">
+        <h2>Live metrics</h2>
+        <div class="metrics">
+          <div class="metric" id="mEar"><div class="k">Eye aspect ratio</div><div class="v" id="vEar">–</div><div class="u">open ≈ 0.30</div></div>
+          <div class="metric" id="mPerclos"><div class="k">PERCLOS · 60s</div><div class="v" id="vPerclos">–</div><div class="u">alert &gt; <span id="uPerclos">15</span>%</div></div>
+          <div class="metric" id="mRate"><div class="k">Blink rate</div><div class="v" id="vRate">–</div><div class="u">normal 15–20 /min</div></div>
+          <div class="metric" id="mDur"><div class="k">Avg blink duration</div><div class="v" id="vDur">–</div><div class="u">normal 100–400 ms</div></div>
+          <div class="metric" id="mMicro"><div class="k">Microsleeps</div><div class="v" id="vMicro">0</div><div class="u">&gt; 1s eye closure</div></div>
+          <div class="metric"><div class="k">Session</div><div class="v" id="vSession">00:00</div><div class="u"><span id="vFps">–</span> fps</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Alerts</h2>
+        <ul class="log" id="log"><li class="log-empty" id="logEmpty">No alerts yet. That's a good sign.</li></ul>
+      </section>
+
+      <section class="card">
+        <h2>How it decides</h2>
+        <div style="font-size:.86rem;color:var(--ink-soft);line-height:1.65">
+          <strong style="color:var(--ink)">💧 Need water</strong> — blink rate below <span id="hDry">10</span>/min (dry eyes) ·
+          <strong style="color:var(--ink)">😪 Tired</strong> — average blink slower than 500 ms ·
+          <strong style="color:var(--ink)">😴 Sleepy</strong> — eyes closed more than <span id="hPerclos">15</span>% of the last minute (PERCLOS) ·
+          <strong style="color:var(--ink)">🚨 Exhausted</strong> — a microsleep (eyes shut over 1 s).
+          Metrics warm up for the first 60 seconds of a session. EyeGuard is a wellness aid, not a medical device.
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    EyeGuard · all processing happens in your browser · nothing is recorded or uploaded ·
+    built on <a href="https://ai.google.dev/edge/mediapipe" target="_blank" rel="noopener">Google MediaPipe</a> Face Mesh
+  </footer>
+</div>
+
+<!-- Critical fatigue overlay -->
+<div id="overlay" role="alertdialog" aria-label="Critical fatigue alert">
+  <h1>🚨 Stop working now</h1>
+  <p>Multiple microsleeps detected. Your body is falling asleep at the screen. Step away, hydrate, and rest your eyes before continuing.</p>
+  <button id="btnDismiss">I'm taking a break</button>
+</div>
+
+<!-- MediaPipe Face Mesh (CDN). If blocked, the app shows a clear error with fixes. -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script>
+"use strict";
+/* ============================================================
+   EyeGuard — browser edition
+   All processing is local. No frames are stored or transmitted.
+   ============================================================ */
+
+// ---------- landmark indices (MediaPipe Face Mesh, 468 pts) ----------
+const L_EYE = [33, 160, 158, 133, 153, 144];   // p1..p6
+const R_EYE = [362, 385, 387, 263, 373, 380];
+
+// ---------- config (mirrors settings.yaml defaults) ----------
+const cfg = {
+  earThreshold: 0.21,
+  perclosWindowMs: 60_000,
+  perclosThreshold: 15,      // %
+  dryEyeRate: 10,            // blinks/min
+  longBlinkMs: 500,
+  microsleepMs: 1000,
+  warmupMs: 60_000,          // don't fire blink-rate alerts before this
+  cooldownMs: { info: 10*60_000, warning: 5*60_000, urgent: 2*60_000, critical: 60_000 },
+  sound: true,
+  notify: false,
+};
+
+// ---------- state ----------
+const S = {
+  running: false,
+  faceMesh: null, modelReady: false,
+  stream: null,
+  sessionStart: 0,
+  eyeClosed: false, closeStart: 0,
+  blinkTimes: [],           // timestamps of completed blinks
+  blinkDurs: [],            // last 20 blink durations (ms)
+  frameLog: [],             // {t, closed} for PERCLOS window
+  microsleeps: 0,
+  lastMicrosleepAt: 0,
+  lastAlertAt: {},          // key -> timestamp
+  fps: 0, frameCount: 0, fpsT0: 0,
+  score: 0,
+  faceSeen: false,
+};
+
+// ---------- dom ----------
+const $ = id => document.getElementById(id);
+const video = $("video"), view = $("view"), ctx = view.getContext("2d");
+const statusLine = $("statusLine");
+
+// ---------- error handling ----------
+function showError(html){ const b=$("errbox"); b.innerHTML=html; b.classList.add("show"); }
+function clearError(){ $("errbox").classList.remove("show"); }
+
+if (typeof FaceMesh === "undefined") {
+  showError(`<strong>Face-tracking model failed to load.</strong> The MediaPipe script from
+    <code>cdn.jsdelivr.net</code> appears blocked. Fixes: check your internet connection,
+    disable ad/script blockers for this page, or try another network. Then reload.`);
+  statusLine.textContent = "Model unavailable — see error above.";
+}
+
+// ---------- MediaPipe setup ----------
+async function initModel(){
+  if (typeof FaceMesh === "undefined") return false;
+  S.faceMesh = new FaceMesh({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`
+  });
+  S.faceMesh.setOptions({
+    maxNumFaces: 1,
+    refineLandmarks: true,
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5,
+  });
+  S.faceMesh.onResults(onResults);
+  // warm up
+  await S.faceMesh.initialize?.().catch(()=>{});
+  S.modelReady = true;
+  statusLine.textContent = "Model ready. Press Start monitoring.";
+  return true;
+}
+
+// ---------- camera (custom loop — no camera_utils dependency) ----------
+async function startCamera(){
+  if (!navigator.mediaDevices?.getUserMedia){
+    showError(`<strong>This browser can't access the camera.</strong> Use a recent Chrome,
+      Edge, Firefox or Safari. Note: camera access requires <code>https://</code> or <code>localhost</code>.`);
+    throw new Error("getUserMedia unavailable");
+  }
+  S.stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: {ideal:640}, height:{ideal:480}, facingMode:"user" }, audio:false
+  });
+  video.srcObject = S.stream;
+  await video.play();
+  view.width = video.videoWidth || 640;
+  view.height = video.videoHeight || 480;
+}
+
+let rafId = 0, busy = false;
+async function loop(){
+  if (!S.running) return;
+  if (!busy && video.readyState >= 2){
+    busy = true;
+    try { await S.faceMesh.send({image: video}); } catch(e){ /* transient */ }
+    busy = false;
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+// ---------- geometry ----------
+const dist = (a,b) => Math.hypot(a.x-b.x, a.y-b.y);
+function earOf(lm, idx){
+  const p = idx.map(i => lm[i]);
+  return (dist(p[1],p[5]) + dist(p[2],p[4])) / (2 * dist(p[0],p[3]));
+}
+
+// ---------- per-frame results ----------
+function onResults(res){
+  const now = performance.now();
+
+  // fps
+  S.frameCount++;
+  if (now - S.fpsT0 >= 1000){ S.fps = S.frameCount; S.frameCount = 0; S.fpsT0 = now; }
+
+  // draw mirrored feed
+  ctx.save();
+  ctx.clearRect(0,0,view.width,view.height);
+  ctx.drawImage(res.image, 0, 0, view.width, view.height);
+
+  let ear = null;
+  const lm = res.multiFaceLandmarks?.[0];
+  if (lm){
+    S.faceSeen = true;
+    ear = (earOf(lm, L_EYE) + earOf(lm, R_EYE)) / 2;
+
+    // eye outline overlay
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = ear < cfg.earThreshold ? "#C6403D" : "#25C4A8";
+    for (const idx of [L_EYE, R_EYE]){
+      ctx.beginPath();
+      idx.forEach((i,k)=>{
+        const x = lm[i].x*view.width, y = lm[i].y*view.height;
+        k ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+      });
+      ctx.closePath(); ctx.stroke();
+    }
+  } else {
+    ctx.fillStyle = "rgba(13,20,27,.55)";
+    ctx.fillRect(0,0,view.width,view.height);
+    ctx.fillStyle = "#cfd9e2";
+    ctx.font = "600 20px Instrument Sans, sans-serif";
+    ctx.textAlign = "center";
+    ctx.scale(-1,1); // counter the CSS mirror so text reads correctly
+    ctx.fillText("Face not detected — check lighting & position", -view.width/2, view.height/2);
+  }
+  ctx.restore();
+
+  if (ear !== null) processEar(ear, now);
+  updateDashboard(ear, now);
+}
+
+// ---------- analytics ----------
+function processEar(ear, now){
+  const closed = ear < cfg.earThreshold;
+
+  // PERCLOS frame log (rolling window)
+  S.frameLog.push({t: now, closed});
+  const cut = now - cfg.perclosWindowMs;
+  while (S.frameLog.length && S.frameLog[0].t < cut) S.frameLog.shift();
+
+  // blink / microsleep state machine
+  if (closed && !S.eyeClosed){ S.eyeClosed = true; S.closeStart = now; }
+  else if (!closed && S.eyeClosed){
+    S.eyeClosed = false;
+    const dur = now - S.closeStart;
+    if (dur >= cfg.microsleepMs){
+      S.microsleeps++;
+      onMicrosleep(now);
+    } else if (dur >= 60){          // ignore single-frame noise
+      S.blinkTimes.push(now);
+      S.blinkDurs.push(dur);
+      if (S.blinkDurs.length > 20) S.blinkDurs.shift();
+    }
+  }
+  // trim blink history to 90s
+  const bcut = now - 90_000;
+  while (S.blinkTimes.length && S.blinkTimes[0] < bcut) S.blinkTimes.shift();
+
+  evaluateStates(now);
+}
+
+const perclosPct = () => {
+  if (!S.frameLog.length) return 0;
+  return 100 * S.frameLog.filter(f=>f.closed).length / S.frameLog.length;
+};
+const blinkRate = () => {
+  const span = Math.min(60_000, performance.now() - S.sessionStart) / 60_000;
+  return span > 0 ? S.blinkTimes.filter(t => t > performance.now()-60_000).length / Math.max(span, 1/6) : 0;
+};
+const avgBlinkDur = () => S.blinkDurs.length
+  ? S.blinkDurs.reduce((a,b)=>a+b,0)/S.blinkDurs.length : 0;
+
+// ---------- fatigue score (weighted composite) ----------
+function fatigueScore(ear){
+  const pcl = perclosPct();
+  const rate = blinkRate();
+  const dur = avgBlinkDur();
+  const warm = performance.now() - S.sessionStart > cfg.warmupMs;
+
+  const earScore  = ear === null ? 0 : clamp(map(ear, 0.30, cfg.earThreshold, 0, 100));
+  const pclScore  = clamp(map(pcl, 5, 30, 0, 100));
+  const rateScore = warm ? clamp(map(Math.abs(rate-17), 3, 12, 0, 100)) : 0;
+  const durScore  = clamp(map(dur, 300, 800, 0, 100));
+  const microScore= clamp(S.microsleeps * 34);
+
+  return Math.round(
+    earScore*.25 + pclScore*.25 + rateScore*.15 + durScore*.15 + microScore*.20
+  );
+}
+const clamp = v => Math.max(0, Math.min(100, v));
+const map = (v,a,b,c,d) => c + (v-a)*(d-c)/(b-a);
+
+// ---------- state evaluation & alerts ----------
+function evaluateStates(now){
+  const warm = now - S.sessionStart > cfg.warmupMs;
+  const pcl = perclosPct(), rate = blinkRate(), dur = avgBlinkDur();
+
+  if (warm && rate > 0 && rate < cfg.dryEyeRate)
+    fireAlert("water", "info", "💧 Hydration break — your blink rate is low and your eyes may be drying out.");
+
+  if (warm && dur > cfg.longBlinkMs)
+    fireAlert("tired", "warning", "😪 Eye fatigue — blinks are getting slow. Time for the 20-20-20 rule: look 20 ft away for 20 s.");
+
+  if (pcl > cfg.perclosThreshold && S.frameLog.length > 100)
+    fireAlert("sleepy", "warning", `😴 Drowsiness detected — eyes closed ${pcl.toFixed(0)}% of the last minute. Stand up and stretch.`);
+}
+
+function onMicrosleep(now){
+  if (S.microsleeps >= 2 && now - S.lastMicrosleepAt < 10*60_000){
+    fireAlert("critical", "critical", "🚨 Critical fatigue — multiple microsleeps. Stop working now.");
+    $("overlay").classList.add("show");
+  } else {
+    fireAlert("microsleep", "urgent", "🚨 Microsleep detected — your eyes closed for over a second. Take a real break.");
+  }
+  S.lastMicrosleepAt = now;
+}
+
+function fireAlert(key, level, msg){
+  const now = performance.now();
+  const cd = cfg.cooldownMs[level] ?? 5*60_000;
+  if (S.lastAlertAt[key] && now - S.lastAlertAt[key] < cd) return;
+  S.lastAlertAt[key] = now;
+
+  // log
+  $("logEmpty")?.remove();
+  const li = document.createElement("li");
+  li.className = level === "info" ? "ok" : (level === "warning" ? "watch" : "danger");
+  const t = new Date();
+  li.innerHTML = `<time>${t.toLocaleTimeString()}</time>${escapeHtml(msg)}`;
+  $("log").prepend(li);
+
+  // sound
+  if (cfg.sound){
+    if (level === "warning") beep(800, .3);
+    else if (level === "urgent") beep(1000, .5);
+    else if (level === "critical"){ beep(1000,.5); setTimeout(()=>beep(1000,.5), 650); }
+  }
+  // notification
+  if (cfg.notify && "Notification" in window && Notification.permission === "granted"){
+    try { new Notification("EyeGuard", { body: msg }); } catch(e){}
+  }
+}
+const escapeHtml = s => s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- audio ----------
+let audioCtx = null;
+function beep(freq, sec){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.frequency.value = freq; o.type = "sine";
+    g.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, audioCtx.currentTime + .02);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + sec);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(); o.stop(audioCtx.currentTime + sec + .05);
+  }catch(e){}
+}
+
+// ---------- dashboard ----------
+function updateDashboard(ear, now){
+  const pcl = perclosPct(), rate = blinkRate(), dur = avgBlinkDur();
+  S.score = fatigueScore(ear);
+
+  $("vEar").textContent = ear === null ? "–" : ear.toFixed(2);
+  $("vPerclos").textContent = pcl.toFixed(0) + "%";
+  $("vRate").textContent = rate.toFixed(0) + "/min";
+  $("vDur").textContent = dur ? dur.toFixed(0) + " ms" : "–";
+  $("vMicro").textContent = S.microsleeps;
+  $("vFps").textContent = S.fps;
+
+  const sec = Math.floor((now - S.sessionStart)/1000);
+  $("vSession").textContent =
+    String(Math.floor(sec/60)).padStart(2,"0") + ":" + String(sec%60).padStart(2,"0");
+
+  // metric flags
+  flag("mPerclos", pcl > cfg.perclosThreshold ? "alarm" : pcl > cfg.perclosThreshold*0.7 ? "flag" : "");
+  const warm = now - S.sessionStart > cfg.warmupMs;
+  flag("mRate", warm && rate < cfg.dryEyeRate && rate > 0 ? "flag" : "");
+  flag("mDur", dur > cfg.longBlinkMs ? "flag" : "");
+  flag("mMicro", S.microsleeps ? "alarm" : "");
+
+  // iris gauge
+  const iris = $("iris");
+  iris.style.setProperty("--score", S.score);
+  const color = S.score >= 70 ? "var(--danger)" : S.score >= 40 ? "var(--watch)" : "var(--ok)";
+  iris.style.setProperty("--iris-color", color);
+  $("scoreNum").textContent = S.score;
+
+  const badge = $("stateBadge");
+  if (S.microsleeps >= 2 || S.score >= 80){ badge.textContent="🚨 EXHAUSTED"; badge.dataset.level="danger"; }
+  else if (pcl > cfg.perclosThreshold){ badge.textContent="😴 SLEEPY"; badge.dataset.level="watch"; }
+  else if (dur > cfg.longBlinkMs){ badge.textContent="😪 TIRED"; badge.dataset.level="watch"; }
+  else if (warm && rate > 0 && rate < cfg.dryEyeRate){ badge.textContent="💧 NEED WATER"; badge.dataset.level="watch"; }
+  else { badge.textContent = warm ? "✓ HEALTHY" : "… CALIBRATING"; badge.dataset.level="ok"; }
+}
+function flag(id, cls){ const el=$(id); el.classList.remove("flag","alarm"); if (cls) el.classList.add(cls); }
+
+// ---------- controls ----------
+$("btnStart").addEventListener("click", async () => {
+  clearError();
+  try{
+    if (!S.modelReady){
+      statusLine.textContent = "Loading model…";
+      const ok = await initModel();
+      if (!ok) return;
+    }
+    statusLine.textContent = "Requesting camera…";
+    await startCamera();
+    $("camOff").style.display = "none";
+    S.running = true;
+    S.sessionStart = performance.now();
+    S.fpsT0 = performance.now();
+    Object.assign(S, {blinkTimes:[], blinkDurs:[], frameLog:[], microsleeps:0, lastAlertAt:{}, eyeClosed:false});
+    $("btnStart").style.display = "none";
+    $("btnStop").style.display = "";
+    statusLine.textContent = "Monitoring. First 60 s is calibration.";
+    loop();
+  }catch(err){
+    console.error(err);
+    if (err.name === "NotAllowedError")
+      showError(`<strong>Camera access denied.</strong> Click the 🔒 icon in the address bar → Site settings → allow Camera, then reload. Camera also requires an <code>https://</code> URL (GitHub Pages provides this).`);
+    else if (err.name === "NotFoundError")
+      showError(`<strong>No camera found.</strong> Connect a webcam and reload.`);
+    else if (err.name === "NotReadableError")
+      showError(`<strong>Camera is in use by another app.</strong> Close other apps (Zoom, Teams, OBS…) and try again.`);
+    else if (!$("errbox").classList.contains("show"))
+      showError(`<strong>Couldn't start.</strong> <code>${escapeHtml(String(err.message || err))}</code> — open the browser console (F12) for details.`);
+    statusLine.textContent = "Stopped.";
+  }
+});
+
+$("btnStop").addEventListener("click", stopAll);
+function stopAll(){
+  S.running = false;
+  cancelAnimationFrame(rafId);
+  S.stream?.getTracks().forEach(t=>t.stop());
+  S.stream = null;
+  $("camOff").style.display = "";
+  ctx.clearRect(0,0,view.width,view.height);
+  $("btnStart").style.display = "";
+  $("btnStop").style.display = "none";
+  $("stateBadge").textContent = "STANDBY"; $("stateBadge").dataset.level = "ok";
+  statusLine.textContent = "Stopped. Session data cleared on reload.";
+}
+
+$("btnDismiss").addEventListener("click", ()=>{
+  $("overlay").classList.remove("show");
+  S.microsleeps = 0; // reset after acknowledged break
+});
+
+$("btnTest").addEventListener("click", ()=>{ beep(800,.3); setTimeout(()=>beep(1000,.3),400); });
+
+// ---------- settings wiring ----------
+const bind = (id, out, fmt, apply) => {
+  const el = $(id);
+  el.addEventListener("input", ()=>{ $(out).textContent = fmt(el.value); apply(parseFloat(el.value)); });
+};
+bind("sEar","oEar", v=>(+v).toFixed(2), v=>cfg.earThreshold=v);
+bind("sPerclos","oPerclos", v=>v+"%", v=>{cfg.perclosThreshold=v; $("uPerclos").textContent=v; $("hPerclos").textContent=v;});
+bind("sDry","oDry", v=>v+"/min", v=>{cfg.dryEyeRate=v; $("hDry").textContent=v;});
+$("sSound").addEventListener("change", e=>cfg.sound = e.target.checked);
+$("sNotif").addEventListener("change", async e=>{
+  cfg.notify = e.target.checked;
+  if (cfg.notify && "Notification" in window && Notification.permission !== "granted"){
+    const p = await Notification.requestPermission();
+    if (p !== "granted"){ cfg.notify = false; e.target.checked = false; }
+  }
+});
+
+// kick off model load in background so Start feels instant
+initModel();
+
+// stop camera when tab closes
+window.addEventListener("pagehide", stopAll);
+</script>
+</body>
+</html>
